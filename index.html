@@ -10,7 +10,7 @@
 <link rel="icon" type="image/png" href="./assets/archive-icon.png?v=6">
 <link rel="apple-touch-icon" href="./assets/archive-icon.png?v=6">
 <link rel="stylesheet" href="./styles.css?v=18">
-<script type="module" src="./app.js?v=17"></script>
+<script type="module" src="./app.js?v=18"></script>
 </head>
 <body>
 <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
@@ -76,7 +76,7 @@
       </div>
       <div class="book-list" id="bookList"></div>
       <div class="section-head outline-title">
-        <div><span class="eyebrow">CURRENT STORY</span><h2>Outline</h2></div>
+        <div><span class="eyebrow">CURRENT MANUSCRIPT</span><h2>Outline</h2></div>
         <button class="button small" id="newChapter" type="button">+ Chapter</button>
       </div>
       <div id="outlineList" class="outline-list"></div>
@@ -101,9 +101,9 @@
       </div>
       <article class="paper" id="paper">
         <div class="paper-meta"><span>MANUSCRIPT <em>/</em> <b id="folio">UNTITLED</b></span><span id="date"></span></div>
-        <label class="sr-only" for="sceneTitle">Scene title</label><input id="sceneTitle" class="scene-title" placeholder="Scene title" maxlength="120">
+        <label class="sr-only" for="sceneTitle">Section title</label><input id="sceneTitle" class="scene-title" placeholder="Section title" maxlength="120">
         <div class="rule"></div>
-        <div id="editor" class="editor" contenteditable="true" role="textbox" aria-label="Write your scene" aria-multiline="true" spellcheck="true"></div>
+        <div id="editor" class="editor" contenteditable="true" role="textbox" aria-label="Write your section" aria-multiline="true" spellcheck="true"></div>
         <div class="paper-foot"><span id="chapterName">CHAPTER ONE</span><span><b id="sceneCount">0</b> WORDS</span></div>
       </article>
     </section>
