@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#211812">
+<meta name="description" content="A thoughtful writing archive for gathering insights and shaping them into guidance.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self' https://esm.sh; connect-src 'self' https://pqifpislzljilqatmtly.supabase.co https://api.dictionaryapi.dev; font-src 'self' data:; object-src 'none'; base-uri 'self'">
+<title>The Writer's Archive</title>
+<link rel="icon" type="image/png" href="./assets/archive-icon.png?v=6">
+<link rel="apple-touch-icon" href="./assets/archive-icon.png?v=6">
+<link rel="stylesheet" href="./styles.css?v=18">
+<script type="module" src="./app.js?v=17"></script>
+</head>
+<body>
+<section class="auth-gate" id="authGate" aria-labelledby="authTitle">
+  <div class="auth-card">
+    <span class="eyebrow">THE WRITER'S ARCHIVE</span>
+    <h1 id="authTitle">Your writing, wherever you are</h1>
+    <p id="authDescription">Sign in to your archive, or enter your email and password to create your own private archive. You may need to confirm your email.</p>
+    <form id="authForm">
+      <label for="authEmail">Email address</label>
+      <input id="authEmail" type="email" autocomplete="email" required>
+      <label for="authPassword">Password</label>
+      <input id="authPassword" type="password" autocomplete="current-password" required>
+      <div class="auth-actions">
+        <button class="button primary" id="signInAccount" type="submit">Sign in</button>
+        <button class="button subtle" id="createAccount" type="button">Create my account</button>
+      </div>
+      <button class="auth-link" id="forgotPassword" type="button">Forgot or need to set your password?</button>
+    </form>
+    <form id="passwordResetForm" hidden>
+      <label for="newPassword">New password</label>
+      <input id="newPassword" type="password" autocomplete="new-password" minlength="8" required>
+      <label for="confirmPassword">Confirm new password</label>
+      <input id="confirmPassword" type="password" autocomplete="new-password" minlength="8" required>
+      <div class="auth-actions">
+        <button class="button primary" id="updatePassword" type="submit">Set password</button>
+        <button class="button subtle" id="cancelPasswordReset" type="button">Back to sign in</button>
+      </div>
+    </form>
+    <p class="auth-message" id="authMessage" role="status" aria-live="polite"></p>
+  </div>
+</section>
+<div class="shell" id="shell" hidden>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="The Writer's Archive">
+      <img class="seal" src="./assets/archive-icon.png?v=6" alt="">
+      <span><strong>The Writer's Archive</strong><small>Gather your insights. Shape them into guidance.</small></span>
+    </a>
+    <nav class="nav" aria-label="Archive sections">
+      <button class="nav-button active" data-view="write" type="button">✎ Write</button>
+      <button class="nav-button" data-view="library" type="button">▤ Library</button>
+      <button class="nav-button" data-view="subjects" type="button">♙ Subjects</button>
+      <button class="nav-button" data-view="places" type="button">⌖ Places</button>
+      <button class="nav-button" data-view="notes" type="button">▧ Notes</button>
+      <button class="nav-button" data-view="sources" type="button">▤ Sources</button>
+    </nav>
+    <div class="top-actions">
+      <label class="sr-only" for="search">Search your archive</label>
+      <input class="search" id="search" type="search" placeholder="Search archive" autocomplete="off" aria-controls="searchResults">
+      <div class="search-results" id="searchResults" aria-live="polite" aria-label="Search results" hidden></div>
+      <button class="button subtle" id="backup" type="button" title="Download a complete JSON backup">Backup</button>
+      <button class="button subtle" id="restore" type="button" title="Restore a JSON backup">Restore</button>
+      <input id="restoreFile" type="file" accept="application/json,.json" hidden>
+      <span class="account-label" id="accountLabel" hidden></span>
+      <button class="button subtle" id="signOut" type="button" title="Save this archive and switch to another account" hidden>Switch account</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="outline" id="outline">
+      <div class="section-head">
+        <div><span class="eyebrow">YOUR LIBRARY</span><h2>Manuscripts</h2></div>
+        <button class="plus" id="newBook" type="button" aria-label="New manuscript">+</button>
+      </div>
+      <div class="book-list" id="bookList"></div>
+      <div class="section-head outline-title">
+        <div><span class="eyebrow">CURRENT STORY</span><h2>Outline</h2></div>
+        <button class="button small" id="newChapter" type="button">+ Chapter</button>
+      </div>
+      <div id="outlineList" class="outline-list"></div>
+      <div class="local-save"><i id="cloudDot" aria-hidden="true"></i><span id="cloudStatus">Opening your private archive…</span><button class="sync-link" id="syncNow" type="button">Sync now</button></div>
+    </aside>
+
+    <section id="writeView" class="write-view">
+      <div class="write-head">
+        <div><span class="eyebrow">THE WRITER'S ARCHIVE / WRITE</span><label class="sr-only" for="bookTitle">Manuscript title</label><input id="bookTitle" class="book-title" value="Untitled Manuscript" maxlength="120"></div>
+        <div class="write-actions"><span class="count"><b id="bookCount">0</b> words</span><button class="button subtle" id="exportText" type="button">Export .txt</button><button class="button subtle" id="focus" type="button" aria-pressed="false">Focus</button></div>
+      </div>
+      <div class="toolbar" id="toolbar" role="toolbar" aria-label="Formatting">
+        <span class="eyebrow">FORMAT</span>
+        <button data-command="bold" type="button" aria-label="Bold"><b>B</b></button>
+        <button data-command="italic" type="button" aria-label="Italic"><i>I</i></button>
+        <button data-command="underline" type="button" aria-label="Underline"><u>U</u></button>
+        <span class="divider"></span>
+        <button data-command="insertUnorderedList" type="button">• List</button>
+        <button data-command="formatBlock" data-value="blockquote" type="button">Quote</button>
+        <button id="lookupWord" class="word-lookup-button" type="button" aria-label="Look up selected word">Look up</button>
+        <span class="spacer"></span><span id="saveState">Saved on this device</span>
+      </div>
+      <article class="paper" id="paper">
+        <div class="paper-meta"><span>MANUSCRIPT <em>/</em> <b id="folio">UNTITLED</b></span><span id="date"></span></div>
+        <label class="sr-only" for="sceneTitle">Scene title</label><input id="sceneTitle" class="scene-title" placeholder="Scene title" maxlength="120">
+        <div class="rule"></div>
+        <div id="editor" class="editor" contenteditable="true" role="textbox" aria-label="Write your scene" aria-multiline="true" spellcheck="true"></div>
+        <div class="paper-foot"><span id="chapterName">CHAPTER ONE</span><span><b id="sceneCount">0</b> WORDS</span></div>
+      </article>
+    </section>
+
+    <section class="collection" id="collection" hidden aria-live="polite"></section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="entryDialog" class="dialog">
+    <form id="entryForm" method="dialog">
+      <div class="dialog-head"><div><span class="eyebrow">THE WRITER'S ARCHIVE</span><h2 id="dialogTitle">New entry</h2></div><button type="button" class="close" id="closeDialog" aria-label="Close">×</button></div>
+      <label id="entryTitleLabel" for="entryTitle">Title</label><input id="entryTitle" maxlength="120" required>
+      <div id="detailsWrap"><label for="entryDetails">Details</label><textarea id="entryDetails" rows="5" placeholder="Add a few useful details…"></textarea></div>
+      <div class="source-fields" id="sourceFields" hidden>
+        <div class="source-grid">
+          <div><label for="sourceType">Source type</label><input id="sourceType" maxlength="80" placeholder="Book, article, interview…" autocomplete="off"></div>
+          <div><label for="sourceAuthor">Author / creator</label><input id="sourceAuthor" maxlength="160" autocomplete="off"></div>
+          <div><label for="sourcePublication">Publication / publisher / site</label><input id="sourcePublication" maxlength="180" autocomplete="off"></div>
+          <div><label for="sourceDate">Year / date / edition</label><input id="sourceDate" maxlength="100" autocomplete="off"></div>
+          <div><label for="sourceLocator">Page / section / timestamp</label><input id="sourceLocator" maxlength="140" autocomplete="off"></div>
+          <div class="source-wide"><label for="sourceUrl">URL or DOI</label><input id="sourceUrl" inputmode="url" maxlength="500" autocomplete="url" placeholder="https://… or DOI"></div>
+          <div class="source-wide"><label for="sourceQuote">Quoted passages</label><textarea id="sourceQuote" rows="5" placeholder="Keep exact quotations together with their source…"></textarea></div>
+          <div class="source-wide"><label for="sourceNotes">Notes and context</label><textarea id="sourceNotes" rows="3" placeholder="Why this source matters, themes, follow-up…"></textarea></div>
+        </div>
+      </div>
+      <div class="dialog-actions"><button type="button" class="button subtle" id="cancelDialog">Cancel</button><button type="submit" class="button primary">Save entry</button></div>
+    </form>
+  </dialog>
+  <dialog id="wordLookup" class="dialog word-lookup" aria-labelledby="wordLookupTitle" aria-describedby="wordLookupStatus">
+    <div class="word-lookup-inner">
+      <div class="dialog-head">
+        <div><span class="eyebrow">THE WRITER'S ARCHIVE / WORD REFERENCE</span><h2 id="wordLookupTitle">Word lookup</h2></div>
+        <button type="button" class="close" id="closeWordLookup" aria-label="Close word lookup">×</button>
+      </div>
+      <div class="word-lookup-tabs" role="tablist" aria-label="Word reference">
+        <button class="word-lookup-tab" id="wordTabThesaurus" type="button" role="tab" data-word-tab="thesaurus" aria-controls="wordThesaurusPanel" aria-selected="true">Thesaurus</button>
+        <button class="word-lookup-tab" id="wordTabDictionary" type="button" role="tab" data-word-tab="dictionary" aria-controls="wordDictionaryPanel" aria-selected="false">Dictionary</button>
+      </div>
+      <p class="word-lookup-status" id="wordLookupStatus" role="status" aria-live="polite">Looking up the selected word…</p>
+      <section class="word-lookup-panel" id="wordThesaurusPanel" role="tabpanel" aria-labelledby="wordTabThesaurus">
+        <div id="wordSynonyms" class="word-synonyms"></div>
+      </section>
+      <section class="word-lookup-panel" id="wordDictionaryPanel" role="tabpanel" aria-labelledby="wordTabDictionary" hidden>
+        <p id="wordPhonetic" class="word-phonetic"></p>
+        <div id="wordDefinitions" class="word-definitions"></div>
+        <p id="wordOrigin" class="word-origin"></p>
+      </section>
+      <p class="word-lookup-privacy">Only the selected word is sent for lookup; your manuscript text stays here.</p>
+    </div>
+  </dialog>
+  <dialog id="deleteDialog" class="dialog delete-dialog" aria-labelledby="deleteDialogTitle" aria-describedby="deleteDialogMessage">
+    <div class="delete-dialog-inner">
+      <div class="dialog-head"><div><span class="eyebrow">THE WRITER'S ARCHIVE</span><h2 id="deleteDialogTitle">Delete this entry?</h2></div></div>
+      <p id="deleteDialogMessage" class="delete-message"></p>
+      <div class="dialog-actions"><button type="button" class="button subtle" id="cancelDelete">Cancel</button><button type="button" class="button danger" id="confirmDelete">Delete</button></div>
+    </div>
+  </dialog>
+</div>
+</body>
+</html>
