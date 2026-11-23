@@ -83,14 +83,115 @@ function copyArchive(value){return JSON.parse(JSON.stringify(value));}
 function mergeEntries(localItems,remoteItems,mergeItem){var rows=new Map();(remoteItems||[]).forEach(function(item){rows.set(item.id,copyArchive(item));});(localItems||[]).forEach(function(item){var remote=rows.get(item.id);rows.set(item.id,mergeItem?mergeItem(copyArchive(item),remote):Object.assign({},remote||{},copyArchive(item)));});return Array.from(rows.values());}
 function mergeArchiveCopies(localCopy,remoteCopy){var local=normalize(copyArchive(localCopy)),remote=normalize(copyArchive(remoteCopy));function mergeChapter(localChapter,remoteChapter){var merged=Object.assign({},remoteChapter||{},localChapter);merged.scenes=mergeEntries(localChapter.scenes,remoteChapter&&remoteChapter.scenes);return merged;}function mergeBook(localBook,remoteBook){var merged=Object.assign({},remoteBook||{},localBook);merged.chapters=mergeEntries(localBook.chapters,remoteBook&&remoteBook.chapters,mergeChapter);return merged;}var merged=Object.assign({},remote,local);merged.books=mergeEntries(local.books,remote.books,mergeBook);["subjects","places","notes","sources"].forEach(function(key){merged[key]=mergeEntries(local[key],remote[key]);});return normalize(merged);}
 function archivesMatch(a,b){try{return stableJson(normalize(copyArchive(a)))===stableJson(normalize(copyArchive(b)));}catch(e){return false;}}
+function cloudConflict(){cloudReady=false;clearTimeout(cloudTimer);setCloudStatus("Another device has newer changes · back up this device before syncing","offline");status("Sync paused · conflicting changes");toast("Sync paused to protect your writing. Download a backup.");}
 function markCloudSynced(stamp,message){cloudStamp=stamp||null;if(cloudStamp)localStorage.setItem(activeKey(LAST_SYNC_KEY),cloudStamp);else localStorage.removeItem(activeKey(LAST_SYNC_KEY));localStorage.removeItem(activeKey(PENDING_KEY));status(message||"Synced to your account");setCloudStatus("Synced across devices","ready");}
 function queueCloudSync(){clearTimeout(cloudTimer);cloudTimer=setTimeout(function(){pushCloud(false);},850);}
 async function readCloudArchive(userId){var result=await supabaseClient.schema("tyler_archive").from("writer_archive_documents").select("archive_json,updated_at").eq("owner_id",userId).maybeSingle();if(result.error)throw result.error;return result.data;}
 async function readLegacyCloudArchive(){if(window.location.hostname==="theblackstaginn.github.io")return{archive:null,updatedAt:null};var response=await fetch("/api/archive",{method:"GET",credentials:"same-origin",cache:"no-store",headers:{accept:"application/json"}});if(!response.ok)throw new Error("Previous archive unavailable");return response.json();}
 async function recoverLegacyArchive(userId,base){var importedKey=accountKey(LEGACY_IMPORTED_KEY,userId);if(localStorage.getItem(importedKey)==="1")return{archive:base,checked:true,imported:false};var checked=false,legacyCloud=null,legacyLocal=null;try{var stored=localStorage.getItem(LEGACY_KEY);if(stored)legacyLocal=normalize(JSON.parse(stored));}catch(e){}try{legacyCloud=await readLegacyCloudArchive();checked=true;}catch(e){}var archive=base?normalize(copyArchive(base)):null,imported=false;if(legacyLocal){archive=archive?mergeArchiveCopies(archive,legacyLocal):legacyLocal;imported=true;}if(legacyCloud&&legacyCloud.archive){var remote=normalize(legacyCloud.archive);archive=archive?mergeArchiveCopies(archive,remote):remote;imported=true;}if(checked)localStorage.setItem(importedKey,"1");return{archive:archive,checked:checked,imported:imported};}
-async function pushCloud(keepalive){if(!cloudReady||!currentUser)return;if(cloudInFlight){cloudQueueAgain=true;return;}cloudInFlight=true;cloudQueueAgain=false;var ownerId=currentUser.id,archiveSnapshot=copyArchive(data);try{var result=await supabaseClient.schema("tyler_archive").from("writer_archive_documents").upsert({owner_id:ownerId,archive_json:archiveSnapshot},{onConflict:"owner_id"}).select("updated_at").single();if(result.error)throw result.error;if(!currentUser||currentUser.id!==ownerId)return;cloudStamp=result.data&&result.data.updated_at||null;if(cloudStamp)localStorage.setItem(accountKey(LAST_SYNC_KEY,ownerId),cloudStamp);if(archivesMatch(data,archiveSnapshot)){localStorage.removeItem(accountKey(PENDING_KEY,ownerId));status("Synced to your account");setCloudStatus("Synced across devices","ready");}else{queueCloudSync();}}catch(e){if(currentUser&&currentUser.id===ownerId){setCloudStatus("Saved on this device · cloud sync paused","offline");status("Saved here · sync paused");}}finally{cloudInFlight=false;if(cloudQueueAgain){cloudQueueAgain=false;queueCloudSync();}}}
-async function bootstrapCloud(user){if(!user||!currentUser||currentUser.id!==user.id)return;setCloudStatus("Opening your account archive…","pending");try{var record=await readCloudArchive(user.id);if(!currentUser||currentUser.id!==user.id)return;cloudStamp=record&&record.updated_at||null;var local=readLocalArchive(user.id),pending=localStorage.getItem(accountKey(PENDING_KEY,user.id))==="1",legacyCloud=!!(record&&hasLegacySceneTitles(record.archive_json)),base=record&&local&&pending?mergeArchiveCopies(local,record.archive_json):record?normalize(record.archive_json):local;var recovered=await recoverLegacyArchive(user.id,base);if(!currentUser||currentUser.id!==user.id)return;cloudReady=true;if(recovered.archive){data=recovered.archive;var changed=!base||!archivesMatch(data,base),needsPush=!record||pending||changed||legacyCloud;persistLocalArchive(user.id,data,needsPush);renderAll();if(needsPush){setCloudStatus(recovered.imported?"Moving your saved archive into this account…":"Saving recovered writing…","pending");queueCloudSync();}else{markCloudSynced(record.updated_at,"Synced from your account");}return;}data=fresh();persistLocalArchive(user.id,data,true);if(recovered.checked)localStorage.setItem(accountKey(LEGACY_IMPORTED_KEY,user.id),"1");renderAll();setCloudStatus("Creating your private archive…","pending");queueCloudSync();}catch(e){if(!currentUser||currentUser.id!==user.id)return;cloudReady=false;var localCopy=readLocalArchive(user.id);data=localCopy||fresh();renderAll();setCloudStatus(localCopy?"Saved on this device · reconnect to sync":"Offline · sign in again to sync","offline");status(localCopy?"Saved on this device":"Offline");}}
-async function manualSync(){if(!currentUser)return;sync();clearTimeout(timer);clearTimeout(cloudTimer);var userId=currentUser.id;try{persistLocalArchive(userId,data,true);setCloudStatus("Checking your account archive…","pending");var record=await readCloudArchive(userId);if(!currentUser||currentUser.id!==userId)return;var base=record?mergeArchiveCopies(readLocalArchive(userId)||data,record.archive_json):readLocalArchive(userId)||data,recovered=await recoverLegacyArchive(userId,base);if(!currentUser||currentUser.id!==userId)return;data=recovered.archive||base;cloudReady=true;persistLocalArchive(userId,data,true);renderAll();if(record&&!hasLegacySceneTitles(record.archive_json)&&archivesMatch(data,record.archive_json)){markCloudSynced(record.updated_at,"Already up to date");return;}await pushCloud(false);}catch(e){if(!currentUser||currentUser.id!==userId)return;cloudReady=false;setCloudStatus("Saved on this device · cloud sync paused","offline");status("Sync check failed");}}
+async function pushCloud(keepalive){
+ if(!cloudReady||!currentUser)return;
+ if(cloudInFlight){cloudQueueAgain=true;return;}
+ cloudInFlight=true;cloudQueueAgain=false;
+ var ownerId=currentUser.id,archiveSnapshot=copyArchive(data),expectedStamp=cloudStamp;
+ try{
+  var table=supabaseClient.schema("tyler_archive").from("writer_archive_documents"),result;
+  if(expectedStamp){
+   result=await table.update({archive_json:archiveSnapshot}).eq("owner_id",ownerId).eq("updated_at",expectedStamp).select("updated_at").maybeSingle();
+   if(result.error)throw result.error;
+   if(!result.data){if(currentUser&&currentUser.id===ownerId)cloudConflict();return;}
+  }else{
+   result=await table.insert({owner_id:ownerId,archive_json:archiveSnapshot}).select("updated_at").single();
+   if(result.error){if(result.error.code==="23505"){if(currentUser&&currentUser.id===ownerId)cloudConflict();return;}throw result.error;}
+  }
+  if(!currentUser||currentUser.id!==ownerId)return;
+  cloudStamp=result.data&&result.data.updated_at||null;
+  if(cloudStamp)localStorage.setItem(accountKey(LAST_SYNC_KEY,ownerId),cloudStamp);
+  if(archivesMatch(data,archiveSnapshot)){
+   localStorage.removeItem(accountKey(PENDING_KEY,ownerId));
+   status("Synced to your account");setCloudStatus("Synced across devices","ready");
+  }else queueCloudSync();
+ }catch(e){
+  if(currentUser&&currentUser.id===ownerId){
+   setCloudStatus("Saved on this device · cloud sync paused","offline");
+   status("Saved here · sync paused");
+  }
+ }finally{
+  cloudInFlight=false;
+  if(cloudQueueAgain){cloudQueueAgain=false;queueCloudSync();}
+ }
+}
+async function bootstrapCloud(user){
+ if(!user||!currentUser||currentUser.id!==user.id)return;
+ setCloudStatus("Opening your account archive…","pending");
+ try{
+  var record=await readCloudArchive(user.id);
+  if(!currentUser||currentUser.id!==user.id)return;
+  cloudStamp=record&&record.updated_at||null;
+  var local=readLocalArchive(user.id),pending=localStorage.getItem(accountKey(PENDING_KEY,user.id))==="1";
+  var lastSynced=localStorage.getItem(accountKey(LAST_SYNC_KEY,user.id));
+  if(pending&&local&&record&&!archivesMatch(local,record.archive_json)&&(!lastSynced||lastSynced!==record.updated_at)){
+   data=local;renderAll();cloudConflict();return;
+  }
+  var legacyCloud=!!(record&&hasLegacySceneTitles(record.archive_json));
+  var base=pending&&local?local:record?normalize(record.archive_json):local;
+  var recovered=await recoverLegacyArchive(user.id,base);
+  if(!currentUser||currentUser.id!==user.id)return;
+  cloudReady=true;
+  if(recovered.archive){
+   data=recovered.archive;
+   var changed=!base||!archivesMatch(data,base),needsPush=!record||pending||changed||legacyCloud;
+   persistLocalArchive(user.id,data,needsPush);renderAll();
+   if(needsPush){
+    setCloudStatus(recovered.imported?"Moving your saved archive into this account…":"Saving recovered writing…","pending");
+    queueCloudSync();
+   }else markCloudSynced(record.updated_at,"Synced from your account");
+   return;
+  }
+  data=fresh();persistLocalArchive(user.id,data,true);
+  if(recovered.checked)localStorage.setItem(accountKey(LEGACY_IMPORTED_KEY,user.id),"1");
+  renderAll();setCloudStatus("Creating your private archive…","pending");queueCloudSync();
+ }catch(e){
+  if(!currentUser||currentUser.id!==user.id)return;
+  cloudReady=false;
+  var localCopy=readLocalArchive(user.id);
+  data=localCopy||fresh();renderAll();
+  setCloudStatus(localCopy?"Saved on this device · reconnect to sync":"Offline · sign in again to sync","offline");
+  status(localCopy?"Saved on this device":"Offline");
+ }
+}
+async function manualSync(){
+ if(!currentUser)return;
+ if(cloudInFlight){cloudQueueAgain=true;setCloudStatus("Finishing a cloud save…","pending");return;}
+ sync();save();clearTimeout(timer);clearTimeout(cloudTimer);
+ var userId=currentUser.id,localAtStart=copyArchive(data);
+ var pending=localStorage.getItem(accountKey(PENDING_KEY,userId))==="1";
+ var lastSynced=localStorage.getItem(accountKey(LAST_SYNC_KEY,userId));
+ try{
+  setCloudStatus("Checking your account archive…","pending");
+  var record=await readCloudArchive(userId);
+  if(!currentUser||currentUser.id!==userId)return;
+  if(!archivesMatch(data,localAtStart)){setCloudStatus("New edits are waiting to sync","pending");queueCloudSync();return;}
+  if(pending&&record&&!archivesMatch(localAtStart,record.archive_json)&&(!lastSynced||lastSynced!==record.updated_at)){
+   cloudConflict();return;
+  }
+  cloudStamp=record&&record.updated_at||null;
+  var base=pending?localAtStart:record?normalize(record.archive_json):localAtStart;
+  var recovered=await recoverLegacyArchive(userId,base);
+  if(!currentUser||currentUser.id!==userId)return;
+  var next=recovered.archive||base,needsPush=!record||pending||!archivesMatch(next,record.archive_json);
+  if(!archivesMatch(data,next)){data=next;renderAll();}
+  cloudReady=true;
+  persistLocalArchive(userId,data,needsPush);
+  if(!needsPush){markCloudSynced(record.updated_at,"Synced from your account");return;}
+  await pushCloud(false);
+ }catch(e){
+  if(!currentUser||currentUser.id!==userId)return;
+  cloudReady=false;
+  setCloudStatus("Saved on this device · cloud sync paused","offline");
+  status("Sync check failed");
+ }
+}
 function setPasswordResetMode(active){$("authForm").hidden=active;$("passwordResetForm").hidden=!active;$("authTitle").textContent=active?"Choose a new password":"Your writing, wherever you are";$("authDescription").textContent=active?"Choose a password with at least eight characters. You can use it to sign in to your private archive.":"Sign in to your archive, or enter your email and password to create your own private archive. You may need to confirm your email.";$("authMessage").textContent="";if(active){$("shell").hidden=true;$("authGate").hidden=false;setTimeout(function(){$("newPassword").focus();},0);}}
 function setAuthUser(user){if(!user){if(currentUser)save();currentUser=null;cloudReady=false;cloudStamp=null;loadedUserId=null;loadingUserId=null;setPasswordResetMode(false);$("shell").hidden=true;$("authGate").hidden=false;$("accountLabel").hidden=true;$("signOut").hidden=true;return;}currentUser=user;$("authGate").hidden=true;$("shell").hidden=false;$("accountLabel").textContent=user.email||"Signed in";$("accountLabel").hidden=false;$("signOut").hidden=false;if(loadedUserId!==user.id&&loadingUserId!==user.id){loadingUserId=user.id;bootstrapCloud(user).finally(function(){if(loadingUserId===user.id)loadingUserId=null;if(currentUser&&currentUser.id===user.id)loadedUserId=user.id;});}}
 function isPasswordRecoveryLink(){return new URLSearchParams(window.location.hash.slice(1)).get("type")==="recovery";}
@@ -108,7 +209,7 @@ function counts(){
  $("sceneCount").textContent=words(s?txt(s.content):"").toLocaleString();
  $("folio").textContent=b?b.title.toUpperCase():"";
  $("chapterName").textContent=currentChapter()?currentChapter().title.toUpperCase():"";
- $("focus").disabled=!b;$("exportText").disabled=!b;
+ $("focus").disabled=!b;$("exportText").disabled=!b;$("printPdf").disabled=!b;
 }
 function renderOutline(){
  var books=$("bookList"),b=currentBook();
@@ -195,8 +296,9 @@ function newBook(name){var b=book(name);data.books.push(b);data.bookId=b.id;data
 function submit(event){event.preventDefault();var title=$("entryTitle").value.trim(),details=$("entryDetails").value.trim();if(!title)return;if(editId&&mode==="sources"){var source=data.sources.find(function(e){return e.id===editId;});if(source){source.title=title;source.type=$("sourceType").value.trim();source.author=$("sourceAuthor").value.trim();source.publication=$("sourcePublication").value.trim();source.date=$("sourceDate").value.trim();source.locator=$("sourceLocator").value.trim();source.url=$("sourceUrl").value.trim();source.quote=$("sourceQuote").value.trim();source.details=$("sourceNotes").value.trim();}}else if(editId&&["subjects","places","notes"].includes(mode)){var old=data[mode].find(function(e){return e.id===editId;});if(old){old.title=title;old.details=details;}}else if(mode==="book"){dialog.close();newBook(title);return;}else if(mode==="chapter"){var ch={id:id(),title:title,scenes:[scene("First Section")]};currentBook().chapters.push(ch);data.chapterId=ch.id;data.sceneId=ch.scenes[0].id;}else if(mode==="scene"){var parent=currentBook().chapters.find(function(c){return c.id===parentId;})||currentChapter(),s=scene(title);parent.scenes.push(s);data.chapterId=parent.id;data.sceneId=s.id;}else if(mode==="sources"){data.sources.push({id:id(),title:title,type:$("sourceType").value.trim(),author:$("sourceAuthor").value.trim(),publication:$("sourcePublication").value.trim(),date:$("sourceDate").value.trim(),locator:$("sourceLocator").value.trim(),url:$("sourceUrl").value.trim(),quote:$("sourceQuote").value.trim(),details:$("sourceNotes").value.trim()});}else data[mode].push({id:id(),title:title,details:details});dialog.close();$("entryForm").reset();save();renderOutline();if(view==="write")renderEditor();else renderCollection();toast("Saved to your archive.");}
 function download(name,content,type){var u=URL.createObjectURL(new Blob([content],{type:type})),a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u);},900);}
 function exportText(){sync();var b=currentBook(),parts=[b.title];b.chapters.forEach(function(c){parts.push("\n\n"+c.title);c.scenes.forEach(function(s){parts.push("\n\n"+s.title+"\n\n"+txt(s.content));});});download(b.title.replace(/[^a-z0-9-_]+/gi,"-")+".txt",parts.join(""),"text/plain;charset=utf-8");toast("Manuscript exported.");}
+function printPdf(){sync();save();var b=currentBook();if(!b)return;var print=$("printSheet");print.innerHTML='<h1 class="print-manuscript-title">'+esc(b.title)+'</h1>'+b.chapters.map(function(c){return '<section class="print-chapter"><h2>'+esc(c.title)+'</h2>'+c.scenes.map(function(s){return '<section class="print-section"><h3>'+esc(s.title)+'</h3><div class="print-writing">'+cleanHtml(s.content)+'</div></section>';}).join("")+'</section>';}).join("");window.print();}
 function backup(){sync();save();download("writers-archive-backup-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify(data,null,2),"application/json");toast("Backup downloaded.");}
-function restore(file){var r=new FileReader();r.onload=function(){try{data=normalize(JSON.parse(String(r.result||"")));ensure();save();renderAll();toast("Backup restored in this browser.");}catch(e){toast("That backup could not be opened.");}};r.readAsText(file);}
+function restore(file){var r=new FileReader();r.onload=function(){try{var replacement=normalize(JSON.parse(String(r.result||"")));if(!window.confirm("Restore this backup? It will replace the current archive. A safety backup of your existing writing will download first."))return;sync();download("writers-archive-before-restore-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify(data,null,2),"application/json");data=replacement;ensure();renderAll();save();toast("Backup restored. Check cloud sync status.");}catch(e){toast("That backup could not be opened.");}};r.readAsText(file);}
 function renderAll(){ensure();renderOutline();renderEditor();searchArchive();status("Saved on this device");}
 function closeSearch(){var results=$("searchResults");results.hidden=true;results.innerHTML="";}
 function searchArchive(){var input=$("search"),results=$("searchResults"),raw=input.value.trim(),q=raw.toLowerCase(),matches=[],limit=12;if(q.length<2){closeSearch();return;}function add(kind,title,detail,ids){if(matches.length<limit)matches.push({kind:kind,title:title,detail:detail,ids:ids||{}});}function has(value){return String(value||"").toLowerCase().includes(q);}data.books.forEach(function(b){if(has(b.title))add("book",b.title,"Manuscript",{book:b.id});b.chapters.forEach(function(c){if(has(c.title))add("chapter",c.title,b.title+" · Chapter",{book:b.id,chapter:c.id});c.scenes.forEach(function(s){if(has(s.title)||has(txt(s.content)))add("scene",s.title,b.title+" · "+c.title,{book:b.id,chapter:c.id,scene:s.id});});});});["subjects","places","notes","sources"].forEach(function(kind){var label={subjects:"Subject",places:"Place",notes:"Note",sources:"Source"}[kind];(data[kind]||[]).forEach(function(entry){var terms=kind==="sources"?[entry.title,entry.type,entry.author,entry.publication,entry.date,entry.locator,entry.url,entry.quote,entry.details]:[entry.title,entry.details];if(terms.some(has)){var detail=kind==="sources"?[entry.type,entry.author,entry.publication].filter(Boolean).join(" · ")||label:entry.details||label;add(kind,entry.title,detail,{entry:entry.id});}});});if(!matches.length){results.innerHTML='<p class="search-empty">No matches for “'+esc(raw)+'”.</p>';}else{results.innerHTML=matches.map(function(item){var ids=Object.keys(item.ids).map(function(key){return'data-'+key+'-id="'+esc(item.ids[key])+'"';}).join(" ");return'<button type="button" class="search-result" data-search-kind="'+esc(item.kind)+'" '+ids+'><span class="search-result-title">'+esc(item.title)+'</span><span class="search-result-detail">'+esc(item.detail)+'</span></button>';}).join("");}results.hidden=false;}
@@ -221,7 +323,7 @@ $("wordLookup").addEventListener("click",function(event){var synonym=event.targe
 wordDialog.addEventListener("close",function(){if(wordLookupController){wordLookupController.abort();wordLookupController=null;}if(rememberedRange){editor.focus({preventScroll:true});var selection=window.getSelection();selection.removeAllRanges();selection.addRange(rememberedRange);}});
 $("collection").addEventListener("click",function(e){var add=e.target.closest("#addEntry");if(add){openDialog(view==="library"?"book":view);return;}var deleteManuscript=e.target.closest("[data-delete-book]");if(deleteManuscript){deleteBook(deleteManuscript.dataset.deleteBook);return;}var open=e.target.closest("[data-open-book]");if(open){var b=data.books.find(function(x){return x.id===open.dataset.openBook;});if(!b)return;data.bookId=b.id;data.chapterId=b.chapters[0].id;data.sceneId=b.chapters[0].scenes[0].id;switchView("write");save();return;}var edit=e.target.closest("[data-edit]");if(edit){var old=data[view].find(function(x){return x.id===edit.dataset.edit;});if(old)openDialog(view,"",old);return;}var remove=e.target.closest("[data-remove]");if(remove){var collectionView=view,entry=data[collectionView].find(function(x){return x.id===remove.dataset.remove;});if(!entry)return;requestDelete("Remove entry?",'Remove "'+entry.title+'" from your archive? This cannot be undone.',function(){data[collectionView]=data[collectionView].filter(function(x){return x.id!==entry.id;});save();renderCollection();toast("Entry removed.");});}});
 $("backup").addEventListener("click",backup);$("restore").addEventListener("click",function(){$("restoreFile").click();});$("restoreFile").addEventListener("change",function(e){if(e.target.files[0])restore(e.target.files[0]);e.target.value="";});
-$("exportText").addEventListener("click",exportText);$("focus").addEventListener("click",function(){setFocusMode(!$("shell").classList.contains("focus-mode"));});
+$("exportText").addEventListener("click",exportText);$("printPdf").addEventListener("click",printPdf);$("focus").addEventListener("click",function(){setFocusMode(!$("shell").classList.contains("focus-mode"));});
 $("search").addEventListener("input",searchArchive);$("search").addEventListener("keydown",function(e){if(e.key==="ArrowDown"){var first=$("searchResults").querySelector("[data-search-kind]");if(first){e.preventDefault();first.focus();}}});$("searchResults").addEventListener("click",function(e){var result=e.target.closest("[data-search-kind]");if(result)openSearchResult(result);});document.addEventListener("pointerdown",function(e){if(!e.target.closest(".top-actions"))closeSearch();});
 $("syncNow").addEventListener("click",manualSync);
 $("paper").addEventListener("pointerup",function(e){if(!$("shell").classList.contains("focus-mode"))return;var r=$("paper").getBoundingClientRect();if(e.clientX-r.left<=48&&e.clientY-r.top<=48)setFocusMode(false);});

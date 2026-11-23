@@ -9,8 +9,8 @@
 <title>The Writer's Archive</title>
 <link rel="icon" type="image/png" href="./assets/archive-icon.png?v=6">
 <link rel="apple-touch-icon" href="./assets/archive-icon.png?v=6">
-<link rel="stylesheet" href="./styles.css?v=18">
-<script type="module" src="./app.js?v=18"></script>
+<link rel="stylesheet" href="./styles.css?v=19">
+<script type="module" src="./app.js?v=19"></script>
 </head>
 <body>
 <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
@@ -86,7 +86,7 @@
     <section id="writeView" class="write-view">
       <div class="write-head">
         <div><span class="eyebrow">THE WRITER'S ARCHIVE / WRITE</span><label class="sr-only" for="bookTitle">Manuscript title</label><input id="bookTitle" class="book-title" value="Untitled Manuscript" maxlength="120"></div>
-        <div class="write-actions"><span class="count"><b id="bookCount">0</b> words</span><button class="button subtle" id="exportText" type="button">Export .txt</button><button class="button subtle" id="focus" type="button" aria-pressed="false">Focus</button></div>
+        <div class="write-actions"><span class="count"><b id="bookCount">0</b> words</span><button class="button subtle" id="exportText" type="button">Export .txt</button><button class="button subtle" id="printPdf" type="button">Print / PDF</button><button class="button subtle" id="focus" type="button" aria-pressed="false">Focus</button></div>
       </div>
       <div class="toolbar" id="toolbar" role="toolbar" aria-label="Formatting">
         <span class="eyebrow">FORMAT</span>
@@ -110,6 +110,7 @@
 
     <section class="collection" id="collection" hidden aria-live="polite"></section>
   </main>
+  <section id="printSheet" class="print-sheet" aria-hidden="true"></section>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <dialog id="entryDialog" class="dialog">

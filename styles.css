@@ -60,3 +60,27 @@ body.focus-active{overflow:hidden;background:#f7f0e2}body.focus-active:before{di
 
 .auth-gate{position:fixed;inset:0;z-index:3000;display:grid;place-items:center;padding:18px;background:rgba(12,8,6,.76)}.auth-card{width:min(440px,100%);padding:30px;border:1px solid rgba(227,199,143,.4);border-radius:10px;color:#f0e5d4;background:#211812;box-shadow:0 24px 90px rgba(0,0,0,.55)}.auth-card>.eyebrow{color:var(--brass2);letter-spacing:.16em}.auth-card h1{margin:12px 0 8px;font:clamp(27px,6vw,34px)/1.12 Georgia,serif}.auth-card>p{margin:0 0 22px;color:#c8b89f;font-size:15px;line-height:1.55}.auth-card label{display:block;margin:13px 0 6px;color:#d2c1aa;font-size:13px}.auth-card input{width:100%;min-height:46px;padding:10px 12px;border:1px solid rgba(237,223,199,.24);border-radius:5px;color:#f5ead8;background:#19120d}.auth-actions{display:flex;gap:9px;margin-top:19px}.auth-actions button{flex:1;min-height:44px}.auth-link{display:block;margin:12px auto 0;padding:5px;border:0;color:#e3c78f;background:transparent;font-size:13px;text-decoration:underline;text-underline-offset:3px}.auth-link:hover{color:#fff4e2}.auth-message{min-height:22px;margin:13px 0 0!important;color:#d8c7b1!important;font-size:13px!important;line-height:1.5}.account-label{max-width:180px;overflow:hidden;color:#c9b99f;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:520px){.auth-card{padding:23px}.auth-actions{flex-direction:column}.account-label{max-width:120px}}
+
+
+/* Prelaunch print layout: whole manuscript in a readable archival format. */
+.print-sheet{display:none}
+@media print {
+ @page{size:auto;margin:18mm 16mm}
+ html,body{margin:0!important;padding:0!important;height:auto!important;background:#fff!important;color:#141414!important}
+ body:before{display:none!important}
+ .shell{display:block!important;position:static!important;max-width:none!important;width:100%!important;border:0!important;box-shadow:none!important;background:#fff!important}
+ body *{visibility:hidden!important}
+ #printSheet,#printSheet *{visibility:visible!important}
+ #printSheet{display:block!important;position:absolute!important;top:0!important;left:0!important;width:100%!important;margin:0!important;padding:0!important;color:#141414!important;background:#fff!important;font:12pt/1.55 Georgia,'Times New Roman',serif!important}
+ #printSheet h1{margin:0 0 25mm!important;color:#141414!important;font:700 23pt/1.18 Georgia,serif!important;text-align:center!important}
+ #printSheet h2{margin:0 0 8mm!important;color:#141414!important;font:700 18pt/1.3 Georgia,serif!important}
+ #printSheet h3{margin:0 0 5mm!important;color:#141414!important;font:700 14pt/1.3 Georgia,serif!important}
+ #printSheet .print-chapter{break-before:page;page-break-before:always}
+ #printSheet .print-chapter:first-of-type{break-before:auto;page-break-before:auto}
+ #printSheet .print-section{margin-bottom:13mm}
+ #printSheet .print-writing p{margin:0 0 4mm!important;color:#141414!important;orphans:3;widows:3}
+ #printSheet .print-writing blockquote{margin:5mm 8mm!important;padding:0 0 0 4mm!important;border-left:2px solid #555!important;color:#141414!important}
+ #printSheet .print-writing ul,#printSheet .print-writing ol{margin:4mm 0 6mm 8mm!important;padding-left:4mm!important;color:#141414!important}
+ #printSheet h1,#printSheet h2,#printSheet h3{break-after:avoid;page-break-after:avoid}
+ #printSheet a{color:#141414!important;text-decoration:underline!important}
+}
