@@ -299,7 +299,7 @@ function loadMammoth(){
  if(window.mammoth&&typeof window.mammoth.convertToHtml==="function")return Promise.resolve(window.mammoth);
  if(loadedMammoth)return loadedMammoth;
  loadedMammoth=new Promise(function(resolve,reject){
-  var script=document.createElement("script");script.src="https://cdn.jsdelivr.net/npm/mammoth@1.13.0/mammoth.browser.min.js";script.integrity="sha384-8NWE3bZDrmRI4IePMoQaEoLhAQ1MmRMJkdNgnGiHRFanTqsFKr0TmK6aSZvFJ/PO";script.crossOrigin="anonymous";script.async=true;
+  var script=document.createElement("script");script.src="./vendor/mammoth.browser.min.js?v=1";script.async=true;
   script.onload=function(){if(window.mammoth&&typeof window.mammoth.convertToHtml==="function")resolve(window.mammoth);else{loadedMammoth=null;reject(new Error("The Word parser did not load."));}};
   script.onerror=function(){loadedMammoth=null;reject(new Error("The Word parser could not be loaded."));};document.head.appendChild(script);
  });
