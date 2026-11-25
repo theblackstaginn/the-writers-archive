@@ -1,1 +1,1 @@
-Mammoth.js is bundled locally to parse Word .docx files in the browser. See MAMMOTH-LICENSE.txt for the library license.
+Mammoth.js v1.13.0 is loaded from a version-pinned jsDelivr package with Subresource Integrity. Parsing happens in this browser; the .docx contents are not sent to jsDelivr or a conversion service. See MAMMOTH-LICENSE.txt for the license.
