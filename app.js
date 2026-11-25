@@ -5,7 +5,7 @@ var SUPABASE_URL="https://pqifpislzljilqatmtly.supabase.co",SUPABASE_KEY="sb_pub
 var supabaseClient=createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
 var KEY="writers-archive-v2",PENDING_KEY="writers-archive-pending-v2",LAST_SYNC_KEY="writers-archive-sync-stamp-v2",LEGACY_KEY="writers-archive-v1",LEGACY_IMPORTED_KEY="writers-archive-legacy-imported-v2",view="write",timer=0,toastTimer=0,cloudTimer=0,mode="",parentId="",editId="";
 var currentUser=null,cloudReady=false,cloudStamp=null,cloudInFlight=false,cloudQueueAgain=false,localGeneration=0,loadedUserId=null,loadingUserId=null;
-var $=function(id){return document.getElementById(id);},editor=$("editor"),dialog=$("entryDialog"),deleteDialog=$("deleteDialog"),wordDialog=$("wordLookup"),pendingDelete=null,rememberedWord="",rememberedRange=null,wordLookupController=null,wordLookupRequest=0;
+var $=function(id){return document.getElementById(id);},editor=$("editor"),dialog=$("entryDialog"),deleteDialog=$("deleteDialog"),wordDialog=$("wordLookup"),importDialog=$("importDialog"),pendingDelete=null,rememberedWord="",rememberedRange=null,wordLookupController=null,wordLookupRequest=0,loadedMammoth=null,pendingDocxImport=null,importRequest=0;
 function id(){return window.crypto&&crypto.randomUUID?crypto.randomUUID():"a"+Date.now().toString(36)+Math.random().toString(36).slice(2);}
 function scene(title){return{id:id(),title:title||"New Section",content:"<p></p>"};}
 function book(title){var ch={id:id(),title:"Chapter One",scenes:[scene("First Section")]};return{id:id(),title:title||"Untitled Manuscript",chapters:[ch]};}
@@ -17,7 +17,7 @@ function accountKey(key,userId){return key+"-"+(userId||"signed-out");}
 function readLocalArchive(userId){try{var raw=localStorage.getItem(accountKey(KEY,userId));if(!raw)return null;var parsed=JSON.parse(raw),legacy=hasLegacySceneTitles(parsed),archive=normalize(parsed);if(legacy)persistLocalArchive(userId,archive,true);return archive;}catch(e){return null;}}
 var data=fresh();
 function esc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
-function txt(html){var d=document.createElement("div");d.innerHTML=cleanHtml(html);return(d.textContent||"").replace(/\u00a0/g," ").trim();}
+function txt(html){var d=document.createElement("div");d.innerHTML=cleanHtml(html);var result="",blockTags=new Set(["P","DIV","UL","OL","LI","H1","H2","H3","BLOCKQUOTE"]);function walk(node){if(node.nodeType===3){result+=node.nodeValue;return;}if(node.nodeType!==1)return;var block=blockTags.has(node.tagName);if(block&&result&&!/\s$/.test(result))result+=" ";if(node.tagName==="BR")result+=" ";else Array.from(node.childNodes).forEach(walk);if(block&&!/\s$/.test(result))result+=" ";}Array.from(d.childNodes).forEach(walk);return result.replace(/\u00a0/g," ").trim();}
 function safeUrl(value){try{var url=new URL(String(value||"").trim());return url.protocol==="http:"||url.protocol==="https:"?url.href:"";}catch(e){return"";}}
 function lookupWordFromText(value){var word=String(value||"").trim().replace(/^[^\p{L}\p{M}]+|[^\p{L}\p{M}]+$/gu,"");return /^[\p{L}\p{M}]+(?:['’\-][\p{L}\p{M}]+)*$/u.test(word)?word:"";}
 function selectedEditorWord(){var selection=window.getSelection();if(!selection||selection.isCollapsed||!selection.rangeCount||!selection.anchorNode||!editor.contains(selection.anchorNode))return"";return lookupWordFromText(selection.toString());}
@@ -295,6 +295,104 @@ function openDialog(kind,parent,existing){mode=kind;parentId=parent||"";editId=e
 function newBook(name){var b=book(name);data.books.push(b);data.bookId=b.id;data.chapterId=b.chapters[0].id;data.sceneId=b.chapters[0].scenes[0].id;switchView("write");save();toast("Your new manuscript is ready.");}
 function submit(event){event.preventDefault();var title=$("entryTitle").value.trim(),details=$("entryDetails").value.trim();if(!title)return;if(editId&&mode==="sources"){var source=data.sources.find(function(e){return e.id===editId;});if(source){source.title=title;source.type=$("sourceType").value.trim();source.author=$("sourceAuthor").value.trim();source.publication=$("sourcePublication").value.trim();source.date=$("sourceDate").value.trim();source.locator=$("sourceLocator").value.trim();source.url=$("sourceUrl").value.trim();source.quote=$("sourceQuote").value.trim();source.details=$("sourceNotes").value.trim();}}else if(editId&&["subjects","places","notes"].includes(mode)){var old=data[mode].find(function(e){return e.id===editId;});if(old){old.title=title;old.details=details;}}else if(mode==="book"){dialog.close();newBook(title);return;}else if(mode==="chapter"){var ch={id:id(),title:title,scenes:[scene("First Section")]};currentBook().chapters.push(ch);data.chapterId=ch.id;data.sceneId=ch.scenes[0].id;}else if(mode==="scene"){var parent=currentBook().chapters.find(function(c){return c.id===parentId;})||currentChapter(),s=scene(title);parent.scenes.push(s);data.chapterId=parent.id;data.sceneId=s.id;}else if(mode==="sources"){data.sources.push({id:id(),title:title,type:$("sourceType").value.trim(),author:$("sourceAuthor").value.trim(),publication:$("sourcePublication").value.trim(),date:$("sourceDate").value.trim(),locator:$("sourceLocator").value.trim(),url:$("sourceUrl").value.trim(),quote:$("sourceQuote").value.trim(),details:$("sourceNotes").value.trim()});}else data[mode].push({id:id(),title:title,details:details});dialog.close();$("entryForm").reset();save();renderOutline();if(view==="write")renderEditor();else renderCollection();toast("Saved to your archive.");}
 function download(name,content,type){var u=URL.createObjectURL(new Blob([content],{type:type})),a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u);},900);}
+function loadMammoth(){
+ if(window.mammoth&&typeof window.mammoth.convertToHtml==="function")return Promise.resolve(window.mammoth);
+ if(loadedMammoth)return loadedMammoth;
+ loadedMammoth=new Promise(function(resolve,reject){
+  var script=document.createElement("script");script.src="./vendor/mammoth.browser.min.js?v=1";script.async=true;
+  script.onload=function(){if(window.mammoth&&typeof window.mammoth.convertToHtml==="function")resolve(window.mammoth);else{loadedMammoth=null;reject(new Error("The Word parser did not load."));}};
+  script.onerror=function(){loadedMammoth=null;reject(new Error("The Word parser could not be loaded."));};document.head.appendChild(script);
+ });
+ return loadedMammoth;
+}
+function importTitleFromFilename(fileName){return String(fileName||"").replace(/\.docx$/i,"").trim().slice(0,120)||"Untitled Manuscript";}
+function appendCellText(target,source,state){
+ var blockTags=new Set(["P","DIV","UL","OL","LI","BLOCKQUOTE","H1","H2","H3"]);
+ Array.from(source.childNodes).forEach(function(node){
+  if(node.nodeType===3){target.appendChild(document.createTextNode(node.nodeValue));return;}
+  if(node.nodeType!==1)return;
+  if(blockTags.has(node.tagName)){if(state.hasBlock)target.appendChild(document.createTextNode(" / "));state.hasBlock=true;appendCellText(target,node,state);return;}
+  target.appendChild(node.cloneNode(true));
+ });
+}
+function flattenDocxTables(doc,warnings){
+ var tables=Array.from(doc.querySelectorAll("table")).reverse();if(!tables.length)return;
+ warnings.push("Table layout is not supported. Text from each row is kept in reading order as paragraphs.");
+ tables.forEach(function(table){
+  var output=[];
+  Array.from(table.querySelectorAll("tr")).forEach(function(row){
+   var cells=Array.from(row.children).filter(function(cell){return cell.tagName==="TD"||cell.tagName==="TH";});if(!cells.length)return;
+   var paragraph=document.createElement("p");
+   cells.forEach(function(cell,index){if(index)paragraph.appendChild(document.createTextNode(" · "));appendCellText(paragraph,cell,{hasBlock:false});});
+   output.push(paragraph);
+  });
+  if(!output.length&&table.textContent.trim()){var paragraph=document.createElement("p");paragraph.textContent=table.textContent.trim();output.push(paragraph);}
+  table.replaceWith.apply(table,output);
+ });
+}
+function importedScene(title){return{id:id(),title:title||"First Section",content:""};}
+function buildImportedBook(fileName,html,messages){
+ var doc=new DOMParser().parseFromString(String(html||""),"text/html"),warnings=[];
+ var hasTables=!!doc.querySelector("table"),hasImages=!!doc.querySelector("img"),hasFootnotes=/(?:id|href|class)=["'][^"']*(?:footnote|endnote)/i.test(String(html||""));
+ var h1Count=doc.querySelectorAll("h1").length,h2Count=doc.querySelectorAll("h2").length;
+ flattenDocxTables(doc,warnings);
+ if(hasImages){
+  warnings.push("Images are not displayed in the editor. Text placeholders will mark where an image appeared.");
+  Array.from(doc.querySelectorAll("img")).forEach(function(image){var label=image.getAttribute("alt");image.replaceWith(document.createTextNode(label?"[Image: "+label+" omitted]":"[Image omitted]"));});
+ }
+ if(hasFootnotes)warnings.push("Footnote or endnote text is imported inline, but Word page placement and cross-reference formatting may change.");
+ if(!h1Count&&!h2Count)warnings.push("No Heading 1 or Heading 2 styles were found. All content will be placed in Chapter One → First Section.");
+ else if(!h1Count&&h2Count)warnings.push("No Heading 1 styles were found. Heading 2 sections will be grouped under Chapter One.");
+ (messages||[]).filter(function(message){return message&&message.type==="warning"&&message.message;}).forEach(function(message){warnings.push("Word formatting note: "+message.message);});
+ var chapters=[],currentChapter=null,currentScene=null,sawHeading1=false,sawHeading2=false;
+ function startChapter(title){currentChapter={id:id(),title:title||("Chapter "+(chapters.length+1)),scenes:[]};chapters.push(currentChapter);currentScene=null;}
+ function finishScene(){if(currentScene&&currentChapter){currentScene.content=cleanHtml(currentScene.content);currentChapter.scenes.push(currentScene);}currentScene=null;}
+ function finishChapter(){if(!currentChapter)return;finishScene();if(!currentChapter.scenes.length)currentChapter.scenes.push(importedScene("First Section"));currentChapter=null;}
+ function ensureScene(){if(!currentChapter)startChapter("Chapter One");if(!currentScene)currentScene=importedScene("First Section");}
+ Array.from(doc.body.childNodes).forEach(function(node){
+  if(node.nodeType===3){if(!node.nodeValue.trim())return;ensureScene();var holder=document.createElement("div");holder.textContent=node.nodeValue;currentScene.content+=holder.innerHTML+"\n";return;}
+  if(node.nodeType!==1)return;
+  var tag=node.tagName,title=(node.textContent||"").trim();
+  if(tag==="H1"){
+   if(currentChapter){if(!sawHeading1&&!sawHeading2&&currentChapter.title==="Chapter One")currentChapter.title="Introduction";finishChapter();}
+   startChapter(title||("Chapter "+(chapters.length+1)));sawHeading1=true;return;
+  }
+  if(tag==="H2"){
+   if(!currentChapter)startChapter("Chapter One");finishScene();currentScene=importedScene(title||("Section "+(currentChapter.scenes.length+1)));sawHeading2=true;return;
+  }
+  ensureScene();currentScene.content+=node.outerHTML+"\n";
+ });
+ finishChapter();
+ if(!chapters.length){startChapter("Chapter One");currentScene=importedScene("First Section");finishChapter();}
+ var book={id:id(),title:importTitleFromFilename(fileName),chapters:chapters};
+ var wordCount=chapters.reduce(function(total,chapter){return total+chapter.scenes.reduce(function(count,section){return count+words(txt(section.content));},0);},0);
+ var sectionCount=chapters.reduce(function(total,chapter){return total+chapter.scenes.length;},0);
+ return{book:book,warnings:Array.from(new Set(warnings)),hasTables:hasTables,hasImages:hasImages,hasFootnotes:hasFootnotes,hasHeadings:!!(h1Count||h2Count),wordCount:wordCount,sectionCount:sectionCount};
+}
+async function readDocxFile(file){
+ if(!/\.docx$/i.test(file.name)){toast("Choose a Microsoft Word .docx file.");return;}
+ var request=++importRequest;pendingDocxImport=null;$("importTitle").value=importTitleFromFilename(file.name);$("importFilename").textContent=file.name;$("importStatus").textContent="Reading the document in this browser…";$("importWarnings").hidden=true;$("importWarningList").innerHTML="";$("confirmImport").disabled=true;
+ if(!importDialog.open)importDialog.showModal();
+ try{
+  var mammoth=await loadMammoth();
+  var result=await mammoth.convertToHtml({arrayBuffer:await file.arrayBuffer()},{styleMap:["u => u"],includeEmbeddedStyleMap:false,ignoreEmptyParagraphs:false,convertImage:mammoth.images.imgElement(function(){return Promise.resolve({alt:""});})});
+  if(request!==importRequest||!importDialog.open)return;
+  var parsed=buildImportedBook(file.name,result.value,result.messages);pendingDocxImport=parsed;var warnings=parsed.warnings.slice();
+  if(!parsed.wordCount)warnings.push("No readable words were found. You can still import this as a blank manuscript.");
+  $("importStatus").textContent=parsed.book.chapters.length+" chapter"+(parsed.book.chapters.length===1?"":"s")+" · "+parsed.sectionCount+" section"+(parsed.sectionCount===1?"":"s")+" · "+parsed.wordCount.toLocaleString()+" words. Review the notes, then import when ready.";
+  if(warnings.length){$("importWarningList").innerHTML=warnings.map(function(warning){return"<li>"+esc(warning)+"</li>";}).join("");$("importWarnings").hidden=false;}
+  $("confirmImport").disabled=false;
+ }catch(error){
+  if(request!==importRequest||!importDialog.open)return;
+  $("importStatus").textContent="This Word document could not be read. Try opening it in Word and saving it as a fresh .docx file.";$("importWarnings").hidden=true;$("confirmImport").disabled=true;console.error("Word manuscript import failed",error);
+ }
+}
+function confirmDocxImport(){
+ if(!pendingDocxImport)return;
+ var parsed=pendingDocxImport,title=$("importTitle").value.trim().slice(0,120)||parsed.book.title;
+ sync();clearTimeout(timer);parsed.book.title=title;data.books.push(parsed.book);data.bookId=parsed.book.id;data.chapterId=parsed.book.chapters[0].id;data.sceneId=parsed.book.chapters[0].scenes[0].id;pendingDocxImport=null;
+ importDialog.close();renderOutline();renderEditor();save();toast('Imported "'+title+'" as a new manuscript.');
+}
 function exportText(){sync();var b=currentBook(),parts=[b.title];b.chapters.forEach(function(c){parts.push("\n\n"+c.title);c.scenes.forEach(function(s){parts.push("\n\n"+s.title+"\n\n"+txt(s.content));});});download(b.title.replace(/[^a-z0-9-_]+/gi,"-")+".txt",parts.join(""),"text/plain;charset=utf-8");toast("Manuscript exported.");}
 function printPdf(){sync();save();var b=currentBook();if(!b)return;var print=$("printSheet");print.innerHTML='<h1 class="print-manuscript-title">'+esc(b.title)+'</h1>'+b.chapters.map(function(c){return '<section class="print-chapter"><h2>'+esc(c.title)+'</h2>'+c.scenes.map(function(s){return '<section class="print-section"><h3>'+esc(s.title)+'</h3><div class="print-writing">'+cleanHtml(s.content)+'</div></section>';}).join("")+'</section>';}).join("");window.print();}
 function backup(){sync();save();download("writers-archive-backup-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify(data,null,2),"application/json");toast("Backup downloaded.");}
@@ -308,6 +406,9 @@ document.querySelectorAll(".nav-button").forEach(function(b){b.addEventListener(
 $("bookList").addEventListener("click",function(e){var remove=e.target.closest("[data-delete-book]");if(remove){deleteBook(remove.dataset.deleteBook);return;}var b=e.target.closest("[data-book]");if(!b)return;sync();var bookPick=data.books.find(function(q){return q.id===b.dataset.book;});if(!bookPick)return;data.bookId=bookPick.id;data.chapterId=bookPick.chapters[0].id;data.sceneId=bookPick.chapters[0].scenes[0].id;switchView("write");save();});
 $("outlineList").addEventListener("click",function(e){var removeScene=e.target.closest("[data-delete-scene]");if(removeScene){deleteScene(removeScene.dataset.chapter,removeScene.dataset.deleteScene);return;}var remove=e.target.closest("[data-delete-chapter]");if(remove){deleteChapter(remove.dataset.deleteChapter);return;}var add=e.target.closest("[data-add-scene]");if(add){openDialog("scene",add.dataset.addScene);return;}var s=e.target.closest("[data-scene]");if(!s)return;sync();data.chapterId=s.dataset.chapter;data.sceneId=s.dataset.scene;renderOutline();renderEditor();save();});
 $("newBook").addEventListener("click",function(){openDialog("book");});$("newChapter").addEventListener("click",function(){if(!currentBook()){toast("Create a manuscript first.");return;}openDialog("chapter");});
+$("importManuscript").addEventListener("click",function(){$("manuscriptFile").click();});$("manuscriptFile").addEventListener("change",function(event){var file=event.target.files&&event.target.files[0];event.target.value="";if(file)readDocxFile(file);});
+function cancelDocxImport(){importRequest++;pendingDocxImport=null;if(importDialog.open)importDialog.close();}
+$("closeImport").addEventListener("click",cancelDocxImport);$("cancelImport").addEventListener("click",cancelDocxImport);importDialog.addEventListener("cancel",function(){importRequest++;pendingDocxImport=null;});$("confirmImport").addEventListener("click",confirmDocxImport);
 $("entryForm").addEventListener("submit",submit);$("closeDialog").addEventListener("click",function(){dialog.close();});$("cancelDialog").addEventListener("click",function(){dialog.close();});
 $("cancelDelete").addEventListener("click",function(){finishDelete(false);});$("confirmDelete").addEventListener("click",function(){finishDelete(true);});deleteDialog.addEventListener("cancel",function(){pendingDelete=null;});
 $("bookTitle").addEventListener("input",function(){var b=currentBook();if(b)b.title=$("bookTitle").value.trim()||"Untitled Manuscript";$("folio").textContent=($("bookTitle").value||"UNTITLED").toUpperCase();renderOutline();later();});

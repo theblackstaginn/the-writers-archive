@@ -9,8 +9,8 @@
 <title>The Writer's Archive</title>
 <link rel="icon" type="image/png" href="./assets/archive-icon.png?v=6">
 <link rel="apple-touch-icon" href="./assets/archive-icon.png?v=6">
-<link rel="stylesheet" href="./styles.css?v=19">
-<script type="module" src="./app.js?v=19"></script>
+<link rel="stylesheet" href="./styles.css?v=20">
+<script type="module" src="./app.js?v=20"></script>
 </head>
 <body>
 <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
@@ -74,6 +74,8 @@
         <div><span class="eyebrow">YOUR LIBRARY</span><h2>Manuscripts</h2></div>
         <button class="plus" id="newBook" type="button" aria-label="New manuscript">+</button>
       </div>
+      <button class="button import-word" id="importManuscript" type="button">Import Word manuscript (.docx)</button>
+      <input id="manuscriptFile" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
       <div class="book-list" id="bookList"></div>
       <div class="section-head outline-title">
         <div><span class="eyebrow">CURRENT MANUSCRIPT</span><h2>Outline</h2></div>
@@ -132,6 +134,22 @@
       </div>
       <div class="dialog-actions"><button type="button" class="button subtle" id="cancelDialog">Cancel</button><button type="submit" class="button primary">Save entry</button></div>
     </form>
+  </dialog>
+  <dialog id="importDialog" class="dialog import-dialog" aria-labelledby="importDialogTitle" aria-describedby="importStatus">
+    <div class="import-dialog-inner">
+      <div class="dialog-head"><div><span class="eyebrow">THE WRITER'S ARCHIVE / WORD IMPORT</span><h2 id="importDialogTitle">Import a manuscript</h2></div><button type="button" class="close" id="closeImport" aria-label="Cancel import">×</button></div>
+      <p class="import-intro">Your .docx is converted in this browser and added as a new manuscript. Existing manuscripts are left in place.</p>
+      <label for="importTitle">Manuscript title</label>
+      <input id="importTitle" maxlength="120" autocomplete="off">
+      <p class="import-filename" id="importFilename"></p>
+      <p class="import-status" id="importStatus" role="status" aria-live="polite">Choose a Word document to begin.</p>
+      <div class="import-warnings" id="importWarnings" hidden>
+        <h3>Before importing</h3>
+        <ul id="importWarningList"></ul>
+      </div>
+      <p class="import-format-note">Paragraphs, bold, italic, underline, supported lists, Heading 1 chapters, and Heading 2 sections are kept. Word page layout, fonts, colors, headers, and footers may be simplified.</p>
+      <div class="dialog-actions"><button type="button" class="button subtle" id="cancelImport">Cancel</button><button type="button" class="button primary" id="confirmImport" disabled>Import manuscript</button></div>
+    </div>
   </dialog>
   <dialog id="wordLookup" class="dialog word-lookup" aria-labelledby="wordLookupTitle" aria-describedby="wordLookupStatus">
     <div class="word-lookup-inner">
