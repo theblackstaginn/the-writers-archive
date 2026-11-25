@@ -1,1 +1,1 @@
-Mammoth.js v1.13.0 is loaded from a version-pinned jsDelivr package with Subresource Integrity. Parsing happens in this browser; the .docx contents are not sent to jsDelivr or a conversion service. See MAMMOTH-LICENSE.txt for the license.
+Mammoth.js browser build v1.13.1, bundled locally. The .docx is parsed in the browser; document contents are not sent to an external conversion service. See MAMMOTH-LICENSE.txt for the license.
