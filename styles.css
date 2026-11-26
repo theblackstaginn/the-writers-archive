@@ -87,3 +87,88 @@ body.focus-active{overflow:hidden;background:#f7f0e2}body.focus-active:before{di
  #printSheet h1,#printSheet h2,#printSheet h3{break-after:avoid;page-break-after:avoid}
  #printSheet a{color:#141414!important;text-decoration:underline!important}
 }
+
+
+/* Mobile polish: calm the reading surface and keep controls inside the viewport. */
+body:before{
+  background-image:
+    linear-gradient(90deg,rgba(10,7,6,.46),rgba(10,7,6,.34),rgba(10,7,6,.46)),
+    linear-gradient(0deg,rgba(10,7,6,.37),rgba(10,7,6,.12)),
+    url("./assets/cafe-desktop.webp");
+}
+@media(max-width:760px){
+  body:before{
+    background-image:
+      linear-gradient(90deg,rgba(10,7,6,.5),rgba(10,7,6,.37),rgba(10,7,6,.5)),
+      linear-gradient(0deg,rgba(10,7,6,.42),rgba(10,7,6,.14)),
+      url("./assets/cafe-mobile.webp?v=2");
+    background-position:center top;
+  }
+  .shell{background:rgba(19,13,10,.3)}
+  .topbar{background:rgba(18,13,10,.78)}
+  .topbar::before{opacity:.05}
+  .top-actions{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    align-items:center;
+    gap:6px;
+    width:100%;
+    margin:0;
+  }
+  .top-actions .search{
+    grid-column:1/-1;
+    width:100%;
+    min-width:0;
+    height:35px;
+  }
+  .top-actions #backup,
+  .top-actions #restore,
+  .top-actions #signOut{
+    width:100%;
+    min-width:0;
+    min-height:34px;
+    padding-inline:5px;
+    font-size:10px;
+    text-align:center;
+  }
+  .top-actions .account-label{display:none}
+  .nav{
+    margin:0;
+    padding:4px 0 5px;
+    border-top:1px solid rgba(239,221,187,.1);
+    scrollbar-width:none;
+  }
+  .nav::-webkit-scrollbar{display:none}
+  .nav-button{flex:0 0 auto;padding-inline:10px}
+  .outline{
+    background:rgba(14,10,8,.62);
+    border-bottom-color:rgba(239,221,187,.16);
+  }
+  .import-word{
+    align-self:flex-start;
+    width:auto;
+    max-width:100%;
+    min-height:36px;
+    margin:8px 0 0;
+    padding-inline:13px;
+    font-size:11px;
+  }
+  .book-list{margin:8px 0 11px}
+  .outline-title{
+    padding-top:10px;
+    border-top:1px solid rgba(239,221,187,.1);
+  }
+  .outline-list{max-height:105px}
+  .local-save{margin-top:8px;padding-top:8px;font-size:12px}
+  .write-view{padding:14px 12px 22px}
+  .toast{
+    left:50%;
+    right:auto;
+    bottom:calc(18px + env(safe-area-inset-bottom));
+    width:min(340px,calc(100vw - 28px));
+    padding:9px 12px;
+    font-size:13px;
+    text-align:center;
+  }
+  .toast.show{transform:translate(-50%,0)}
+}
